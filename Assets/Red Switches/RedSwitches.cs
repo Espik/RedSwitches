@@ -250,4 +250,124 @@ public class RedSwitches : MonoBehaviour {
         Debug.LogFormat("[Red Switches #{0}] You flipped the same switch twice in a row! Strike!", moduleId);
         GetComponent<KMBombModule>().HandleStrike();
     }
+
+    // TP and autosolver written by Quinn Wuest
+#pragma warning disable 0414
+    private readonly string TwitchHelpMessage = @"!{0} 1 2 3 4 5 [Flip switches 1, 2, 3, 4, 5.] | Switches are numbered from left to right.";
+#pragma warning restore 0414
+
+    private IEnumerator ProcessTwitchCommand(string command)
+    {
+        var parameters = command.ToLowerInvariant().Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parameters.Length == 0)
+            yield break;
+
+        var skip = (new[] { "flip", "press", "switch", "toggle" }).Contains(parameters[0]) ? 1 : 0;
+
+        if (parameters.Skip(skip).Any(i => { int val; return !int.TryParse(i.Trim(), out val) || val < 1 || val > 5; }))
+            yield break;
+
+        yield return null;
+
+        foreach(var p in parameters.Skip(skip))
+        {
+            var sw = 5 - int.Parse(p.Trim());
+            while (!canFlip)
+                yield return null;
+            Switches[sw].OnInteract();
+            yield return new WaitForSeconds(0.25f);
+        }
+    }
+
+    public class SwitchState
+    {
+        public bool[] SwitchPositions { get; private set; }
+        public bool[] LedPositions { get; private set; }
+        public int PreviousSwitch { get; private set; }
+
+        public SwitchState(bool[] switchPositions, bool[] ledPositions, int prevSwitch)
+        {
+            SwitchPositions = switchPositions;
+            LedPositions = ledPositions;
+            PreviousSwitch = prevSwitch;
+        }
+    }
+
+    public SwitchState GetSwitchState(SwitchState state, int sw)
+    {
+        bool[] swPos = state.SwitchPositions.ToArray();
+        bool[] ledPos = state.LedPositions.ToArray();
+        swPos[sw] = !swPos[sw];
+        swPos[switchToggles[sw]] = !swPos[switchToggles[sw]];
+        ledPos[goalToggles[sw]] = !ledPos[goalToggles[sw]];
+
+        return new SwitchState(swPos, ledPos, sw);
+    }
+
+    struct QueueItem
+    {
+        public SwitchState State { get; private set; }
+        public SwitchState Parent { get; private set; }
+        public int Action { get; private set; }
+        
+        public QueueItem(SwitchState state, SwitchState parent, int action)
+        {
+            State = state;
+            Parent = parent;
+            Action = action;
+        }
+    }
+
+    private IEnumerator TwitchHandleForcedSolve()
+    {
+        var currentState = new SwitchState(switchPositions, goalPositions, lastSwitch);
+
+        var visited = new Dictionary<SwitchState, QueueItem>();
+        var q = new Queue<QueueItem>();
+        q.Enqueue(new QueueItem(currentState, null, 0));
+
+        SwitchState solutionState = null;
+        while(q.Count > 0)
+        {
+            var qi = q.Dequeue();
+            if (visited.ContainsKey(qi.State))
+                continue;
+            visited[qi.State] = qi;
+            if (qi.State.SwitchPositions.SequenceEqual(qi.State.LedPositions))
+            {
+                solutionState = qi.State;
+                break;
+            }
+            if (qi.State.PreviousSwitch != 0)
+                q.Enqueue(new QueueItem(GetSwitchState(qi.State, 0), qi.State, 0));
+            if (qi.State.PreviousSwitch != 1)
+                q.Enqueue(new QueueItem(GetSwitchState(qi.State, 1), qi.State, 1));
+            if (qi.State.PreviousSwitch != 2)
+                q.Enqueue(new QueueItem(GetSwitchState(qi.State, 2), qi.State, 2));
+            if (qi.State.PreviousSwitch != 3)
+                q.Enqueue(new QueueItem(GetSwitchState(qi.State, 3), qi.State, 3));
+            if (qi.State.PreviousSwitch != 4)
+                q.Enqueue(new QueueItem(GetSwitchState(qi.State, 4), qi.State, 4));
+        }
+
+        var r = solutionState;
+        var path = new List<int>();
+        while (true)
+        {
+            var nr = visited[r];
+            if (nr.Parent == null)
+                break;
+            path.Add(nr.Action);
+            r = nr.Parent;
+        }
+
+        for (int i = path.Count - 1; i >= 0; i--)
+        {
+            while (!canFlip)
+                yield return null;
+            Switches[path[i]].OnInteract();
+            if (!moduleSolved)
+                yield return new WaitForSeconds(0.25f);
+        }
+    }
 }

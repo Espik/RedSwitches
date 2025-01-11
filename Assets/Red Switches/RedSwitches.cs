@@ -256,8 +256,7 @@ public class RedSwitches : MonoBehaviour {
     private readonly string TwitchHelpMessage = @"!{0} 1 2 3 4 5 [Flip switches 1, 2, 3, 4, 5.] | Switches are numbered from left to right.";
 #pragma warning restore 0414
 
-    private IEnumerator ProcessTwitchCommand(string command)
-    {
+    private IEnumerator ProcessTwitchCommand(string command) {
         var parameters = command.ToLowerInvariant().Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
         if (parameters.Length == 0)
             yield break;
@@ -269,8 +268,7 @@ public class RedSwitches : MonoBehaviour {
 
         yield return null;
 
-        foreach(var p in parameters.Skip(skip))
-        {
+        foreach(var p in parameters.Skip(skip)) {
             var sw = 5 - int.Parse(p.Trim());
             while (!canFlip)
                 yield return null;
@@ -279,22 +277,19 @@ public class RedSwitches : MonoBehaviour {
         }
     }
 
-    public class SwitchState
-    {
+    public class SwitchState {
         public bool[] SwitchPositions { get; private set; }
         public bool[] LedPositions { get; private set; }
         public int PreviousSwitch { get; private set; }
 
-        public SwitchState(bool[] switchPositions, bool[] ledPositions, int prevSwitch)
-        {
+        public SwitchState(bool[] switchPositions, bool[] ledPositions, int prevSwitch) {
             SwitchPositions = switchPositions;
             LedPositions = ledPositions;
             PreviousSwitch = prevSwitch;
         }
     }
 
-    public SwitchState GetSwitchState(SwitchState state, int sw)
-    {
+    public SwitchState GetSwitchState(SwitchState state, int sw) {
         bool[] swPos = state.SwitchPositions.ToArray();
         bool[] ledPos = state.LedPositions.ToArray();
         swPos[sw] = !swPos[sw];
@@ -304,22 +299,19 @@ public class RedSwitches : MonoBehaviour {
         return new SwitchState(swPos, ledPos, sw);
     }
 
-    struct QueueItem
-    {
+    struct QueueItem {
         public SwitchState State { get; private set; }
         public SwitchState Parent { get; private set; }
         public int Action { get; private set; }
         
-        public QueueItem(SwitchState state, SwitchState parent, int action)
-        {
+        public QueueItem(SwitchState state, SwitchState parent, int action) {
             State = state;
             Parent = parent;
             Action = action;
         }
     }
 
-    private IEnumerator TwitchHandleForcedSolve()
-    {
+    private IEnumerator TwitchHandleForcedSolve() {
         var currentState = new SwitchState(switchPositions, goalPositions, lastSwitch);
 
         var visited = new Dictionary<SwitchState, QueueItem>();
@@ -327,14 +319,12 @@ public class RedSwitches : MonoBehaviour {
         q.Enqueue(new QueueItem(currentState, null, 0));
 
         SwitchState solutionState = null;
-        while(q.Count > 0)
-        {
+        while(q.Count > 0) {
             var qi = q.Dequeue();
             if (visited.ContainsKey(qi.State))
                 continue;
             visited[qi.State] = qi;
-            if (qi.State.SwitchPositions.SequenceEqual(qi.State.LedPositions))
-            {
+            if (qi.State.SwitchPositions.SequenceEqual(qi.State.LedPositions)) {
                 solutionState = qi.State;
                 break;
             }
@@ -352,8 +342,7 @@ public class RedSwitches : MonoBehaviour {
 
         var r = solutionState;
         var path = new List<int>();
-        while (true)
-        {
+        while (true) {
             var nr = visited[r];
             if (nr.Parent == null)
                 break;
@@ -361,8 +350,7 @@ public class RedSwitches : MonoBehaviour {
             r = nr.Parent;
         }
 
-        for (int i = path.Count - 1; i >= 0; i--)
-        {
+        for (int i = path.Count - 1; i >= 0; i--) {
             while (!canFlip)
                 yield return null;
             Switches[path[i]].OnInteract();

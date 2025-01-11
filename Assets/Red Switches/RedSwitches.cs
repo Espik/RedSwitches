@@ -249,5 +249,85 @@ public class RedSwitches : MonoBehaviour {
     private void Strike() {
         Debug.LogFormat("[Red Switches #{0}] You flipped the same switch twice in a row! Strike!", moduleId);
         GetComponent<KMBombModule>().HandleStrike();
+        positionsToggled.Clear();
+    }
+
+    // Twitch Plays
+#pragma warning disable IDE0051 // Remove unused private members
+    readonly string TwitchHelpMessage = "\"!{0} flip 1 2 3 4 5\" [Flips the 1st, 2nd, 3rd, 4th, and 5th switches from left to right. \"flip\" is optional.]";
+#pragma warning restore IDE0051 // Remove unused private members
+
+    IEnumerator ProcessTwitchCommand(string cmd)
+    {
+        var intCmd = cmd.Trim().ToLowerInvariant();
+        if (intCmd.StartsWith("flip"))
+            intCmd = intCmd.Substring(4).Trim();
+        List<int> switchPositions = new List<int>();
+        foreach (var posPosition in intCmd.Split())
+        {
+            int pos;
+            if (!int.TryParse(posPosition, out pos) || pos < 1 || pos > 5)
+            {
+                yield return string.Format("sendtochaterror \"{0}\" does not correspond to a valid position on the module!", posPosition);
+                yield break;
+            }
+            switchPositions.Add(pos - 1);
+        }
+        if (!switchPositions.Any())
+        {
+            yield return "sendtochaterror No switches have been specified! Specify at least 1 number in order to flip these.";
+            yield break;
+        }
+        yield return null;
+        for (var x = 0; x < switchPositions.Count; x++)
+        {
+            while (!canFlip)
+                yield return string.Format("trycancel After {0} flip(s), command execution was canceled!", x + 1);
+            Switches[switchPositions[x]].OnInteract();
+            yield return new WaitForSeconds(0.1f);
+        }
+    }
+    
+    IEnumerator TwitchHandleForcedSolve()
+    {
+        if (moduleSolved)
+            yield break;
+        var curCombo = new List<List<int>> { new List<int>() };
+        var foundCombos = new List<List<int>>();
+
+        while (!foundCombos.Any() && curCombo.Any())
+        {
+            var nextCombos = new List<List<int>>();
+            foreach (var aCombo in curCombo)
+            {
+                var nextOptions = Enumerable.Range(0, 5).Where(a => a != (aCombo.Any() ? aCombo.Last() : lastSwitch));
+                foreach (var anOption in nextOptions)
+                {
+                    var createdCombo = aCombo.Concat(new[] { anOption }).ToList();
+                    var simulatedSwitchPos = switchPositions.ToArray();
+                    var simulatedGoalPos = goalPositions.ToArray();
+                    foreach (var idx in createdCombo)
+                    {
+                        var idxToggleGoal = goalToggles[idx];
+                        var idxToggleSwitch = switchToggles[idx];
+                        simulatedSwitchPos[idx] ^= true;
+                        simulatedSwitchPos[idxToggleSwitch] ^= true;
+                        simulatedGoalPos[idxToggleGoal] ^= true;
+                    }
+                    if (simulatedSwitchPos.SequenceEqual(simulatedGoalPos))
+                        foundCombos.Add(createdCombo);
+                    nextCombos.Add(createdCombo);
+                }
+            }
+            yield return true;
+            curCombo = nextCombos;
+        }
+        Debug.LogFormat("<Red Switches #{0}> D = {1} solution found.", moduleId, foundCombos.First().Count);
+        foreach (var idx in foundCombos.First())
+        {
+            while (!canFlip)
+                yield return true;
+            Switches[idx].OnInteract();
+        }
     }
 }

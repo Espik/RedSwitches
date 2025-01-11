@@ -269,7 +269,7 @@ public class RedSwitches : MonoBehaviour {
         yield return null;
 
         foreach(var p in parameters.Skip(skip)) {
-            var sw = 5 - int.Parse(p.Trim());
+            var sw = int.Parse(p.Trim()) - 1;
             while (!canFlip)
                 yield return null;
             Switches[sw].OnInteract();
